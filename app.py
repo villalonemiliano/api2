@@ -5,8 +5,10 @@ from database.connection import init_databases, close_db
 from services.analysis_service import AnalysisService
 from services.stats_service import StatsService
 from services.auth_service import AuthService
+from services.notification_service import NotificationService
 from models.user import User
 from utils.decorators import require_api_key, log_request
+from middlewares.auth_middleware import require_admin
 from utils.validators import validate_symbol, validate_email, validate_plan
 from utils.response import (
     success_response, error_response, not_found_response,
@@ -63,7 +65,29 @@ def get_user_info():
         logger.error(f"Error getting user info: {str(e)}")
         return error_response("Internal server error", status_code=500)
 
+@app.route('/user/reset-api-key', methods=['POST'])
+@require_api_key
+@log_request
+def reset_api_key():
+    """Reset user's API key"""
+    try:
+        # Generate new API key
+        new_api_key = User.reset_api_key(g.user['id'])
+        
+        # Send notification
+        NotificationService.send_api_key_reset(g.user, new_api_key)
+        
+        return success_response(
+            data={"api_key": new_api_key},
+            message="API key reset successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error resetting API key: {str(e)}")
+        return error_response("Internal server error", status_code=500)
+
 @app.route('/admin/create_user', methods=['POST'])
+@require_admin
+@log_request
 def create_user():
     """Create a new user (admin only)"""
     try:
@@ -102,6 +126,37 @@ def create_user():
             raise
     except Exception as e:
         logger.error(f"Error creating user: {str(e)}")
+        return error_response("Internal server error", status_code=500)
+
+@app.route('/admin/users', methods=['GET'])
+@require_admin
+@log_request
+def list_users():
+    """List all users (admin only)"""
+    try:
+        users = User.get_all_users()
+        return success_response(data=users)
+    except Exception as e:
+        logger.error(f"Error listing users: {str(e)}")
+        return error_response("Internal server error", status_code=500)
+
+@app.route('/admin/user/<user_id>', methods=['GET'])
+@require_admin
+@log_request
+def get_user_details(user_id):
+    """Get detailed user information (admin only)"""
+    try:
+        user = User.get_by_id(user_id)
+        if not user:
+            return not_found_response(f"User {user_id} not found")
+        
+        # Get detailed stats
+        stats = StatsService.get_user_stats(user)
+        user['stats'] = stats
+        
+        return success_response(data=user)
+    except Exception as e:
+        logger.error(f"Error getting user details: {str(e)}")
         return error_response("Internal server error", status_code=500)
 
 if __name__ == '__main__':

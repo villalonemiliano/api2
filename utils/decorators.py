@@ -1,32 +1,60 @@
 from functools import wraps
 from flask import request, jsonify, g
 import time
+import re
 from services.auth_service import AuthService
 from models.request_log import RequestLog
+from utils.response import unauthorized_response, rate_limit_response
+from config import API_KEY_HEADER, API_KEY_PATTERN, RATE_LIMIT_WARNING_THRESHOLD
 import logging
 
 logger = logging.getLogger(__name__)
 
+def validate_api_key_format(api_key):
+    """Validate API key format"""
+    if not api_key:
+        return False, "API key is required"
+    
+    if not re.match(API_KEY_PATTERN, api_key):
+        return False, "Invalid API key format"
+    
+    return True, api_key
+
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.args.get('api_key')
-        if not api_key:
-            return jsonify({"error": "API key required"}), 401
+        # Get API key from header
+        api_key = request.headers.get(API_KEY_HEADER)
         
-        # Validate API key
-        user = AuthService.validate_api_key(api_key)
+        # Validate API key format
+        is_valid, result = validate_api_key_format(api_key)
+        if not is_valid:
+            logger.warning(f"Invalid API key format from IP: {request.remote_addr}")
+            return unauthorized_response(result)
+        
+        # Validate API key and get user
+        user = AuthService.validate_api_key(result)
         if not user:
-            return jsonify({"error": "Invalid API key"}), 401
+            logger.warning(f"Invalid API key from IP: {request.remote_addr}")
+            return unauthorized_response("Invalid API key")
         
         # Check rate limit
         within_limit, current_usage = AuthService.check_rate_limit(user)
         if not within_limit:
-            return jsonify({
-                "error": "Daily request limit exceeded",
-                "limit": PLANS[user['plan']]['requests_per_day'],
-                "used": current_usage
-            }), 429
+            logger.warning(f"Rate limit exceeded for user {user['id']}")
+            return rate_limit_response(
+                PLANS[user['plan']]['requests_per_day'],
+                current_usage
+            )
+        
+        # Check if approaching rate limit
+        if PLANS[user['plan']]['requests_per_day'] > 0:
+            usage_ratio = current_usage / PLANS[user['plan']]['requests_per_day']
+            if usage_ratio >= RATE_LIMIT_WARNING_THRESHOLD:
+                logger.warning(
+                    f"User {user['id']} approaching rate limit: "
+                    f"{current_usage}/{PLANS[user['plan']]['requests_per_day']}"
+                )
         
         # Store user in request context
         g.user = user
@@ -45,7 +73,9 @@ def log_request(f):
             'endpoint': request.path,
             'symbol': kwargs.get('symbol', '').upper(),
             'ip_address': request.remote_addr,
-            'user_agent': request.user_agent.string
+            'user_agent': request.user_agent.string,
+            'method': request.method,
+            'query_params': dict(request.args)
         }
         
         # Execute view
@@ -67,6 +97,13 @@ def log_request(f):
                     status_code=response[1] if isinstance(response, tuple) else 200,
                     response_time=response_time
                 )
+                
+                # Log warning if response time is high
+                if response_time > 1.0:  # More than 1 second
+                    logger.warning(
+                        f"Slow response time ({response_time:.2f}s) for "
+                        f"endpoint {request_info['endpoint']} from user {g.user['id']}"
+                    )
             except Exception as e:
                 logger.error(f"Error logging request: {str(e)}")
         

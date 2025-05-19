@@ -3,7 +3,7 @@ import hashlib
 import datetime
 from database.connection import get_db_connection
 import logging
-from config import PLANS
+from config import PLANS, API_KEY_LENGTH
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,34 @@ class User:
             raise
 
     @staticmethod
+    def get_by_id(user_id):
+        """
+        Get user by ID
+        """
+        try:
+            with get_db_connection('users') as conn:
+                cursor = conn.cursor()
+                user = cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+                return dict(user) if user else None
+        except Exception as e:
+            logger.error(f"Error getting user by ID: {str(e)}")
+            raise
+
+    @staticmethod
+    def get_all_users():
+        """
+        Get all users (admin only)
+        """
+        try:
+            with get_db_connection('users') as conn:
+                cursor = conn.cursor()
+                users = cursor.execute('SELECT * FROM users ORDER BY created_at DESC').fetchall()
+                return [dict(user) for user in users]
+        except Exception as e:
+            logger.error(f"Error getting all users: {str(e)}")
+            raise
+
+    @staticmethod
     def update_last_login(user_id):
         """
         Update user's last login timestamp
@@ -70,6 +98,46 @@ class User:
                 conn.commit()
         except Exception as e:
             logger.error(f"Error updating last login: {str(e)}")
+            raise
+
+    @staticmethod
+    def reset_api_key(user_id):
+        """
+        Reset user's API key
+        """
+        try:
+            with get_db_connection('users') as conn:
+                cursor = conn.cursor()
+                
+                # Generate new API key
+                new_api_key = hashlib.sha256(
+                    f"{user_id}:{datetime.datetime.now().timestamp()}".encode()
+                ).hexdigest()
+                
+                # Update user
+                cursor.execute('UPDATE users SET api_key = ? WHERE id = ?', (new_api_key, user_id))
+                conn.commit()
+                
+                return new_api_key
+        except Exception as e:
+            logger.error(f"Error resetting API key: {str(e)}")
+            raise
+
+    @staticmethod
+    def update_plan(user_id, new_plan):
+        """
+        Update user's subscription plan
+        """
+        try:
+            if new_plan not in PLANS:
+                raise ValueError(f"Invalid plan: {new_plan}")
+            
+            with get_db_connection('users') as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE users SET plan = ? WHERE id = ?', (new_plan, user_id))
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error updating plan: {str(e)}")
             raise
 
     @staticmethod

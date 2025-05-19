@@ -9,24 +9,74 @@ DATABASE_USERS = 'api_users.db'
 API_HOST = '0.0.0.0'
 API_PORT = 5002
 DEBUG = False
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
+
+# Security Configuration
+REQUIRE_HTTPS = ENVIRONMENT == 'production'
+API_KEY_HEADER = 'X-API-Key'  # Header for API key
+API_KEY_LENGTH = 64
+API_KEY_PATTERN = r'^[a-f0-9]{64}$'  # 64 character hex string
+
+# Admin Configuration
+ADMIN_API_KEYS = os.environ.get('ADMIN_API_KEYS', '').split(',')
+ADMIN_EMAIL_DOMAIN = os.environ.get('ADMIN_EMAIL_DOMAIN', 'admin.example.com')
+
+# Rate Limiting
+RATE_LIMIT_WINDOW = timedelta(days=1)
+RATE_LIMIT_WARNING_THRESHOLD = 0.8  # 80% of limit
+RATE_LIMIT_BY_MINUTE = 60
+RATE_LIMIT_BY_HOUR = 1000
 
 # Logging Configuration
 LOG_FILE = 'api2.log'
 LOG_LEVEL = 'INFO'
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-
-# Rate Limiting
-RATE_LIMIT_WINDOW = timedelta(days=1)
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')  # For production error tracking
 
 # Available Plans
 PLANS = {
-    'free': {'requests_per_day': 10, 'fields': ['short_term', 'medium_term', 'long_term']},
-    'basic': {'requests_per_day': 100, 'fields': ['short_term', 'medium_term', 'long_term', 'fund_score']},
-    'premium': {'requests_per_day': 1000, 'fields': ['short_term', 'medium_term', 'long_term', 'fund_score', 'price_data']},
-    'enterprise': {'requests_per_day': -1, 'fields': 'all'}  # -1 means unlimited
+    'free': {
+        'requests_per_day': 10,
+        'fields': ['short_term', 'medium_term', 'long_term'],
+        'price': 0,
+        'description': 'Basic analysis with short, medium and long term predictions'
+    },
+    'basic': {
+        'requests_per_day': 100,
+        'fields': ['short_term', 'medium_term', 'long_term', 'fund_score'],
+        'price': 9.99,
+        'description': 'Includes fundamental analysis score'
+    },
+    'premium': {
+        'requests_per_day': 1000,
+        'fields': ['short_term', 'medium_term', 'long_term', 'fund_score', 'price_data'],
+        'price': 29.99,
+        'description': 'Full access to all analysis features'
+    },
+    'enterprise': {
+        'requests_per_day': -1,  # Unlimited
+        'fields': 'all',
+        'price': 99.99,
+        'description': 'Unlimited access with priority support'
+    }
 }
 
+# Notification Settings
+NOTIFICATION_THRESHOLD = 0.8  # 80% of daily limit
+SMTP_HOST = os.environ.get('SMTP_HOST', '')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+NOTIFICATION_FROM = os.environ.get('NOTIFICATION_FROM', 'noreply@example.com')
+
+# Redis Configuration (for rate limiting in production)
+REDIS_URL = os.environ.get('REDIS_URL', '')
+USE_REDIS = bool(REDIS_URL)
+
+# Metrics Configuration
+ENABLE_METRICS = ENVIRONMENT == 'production'
+PROMETHEUS_METRICS_PORT = 9090
+
 # Security
-API_KEY_LENGTH = 64
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-here')  # Change in production
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1) 
