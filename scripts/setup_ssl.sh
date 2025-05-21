@@ -4,8 +4,8 @@
 set -e
 
 # Variables
-DOMAIN="tu-dominio.com"
-EMAIL="tu-email@dominio.com"
+DOMAIN="vifiprueba.es"
+EMAIL="villalonemiliano199@gmail.com"
 CERTBOT_PATH="/etc/letsencrypt/live/$DOMAIN"
 
 # Instalar Certbot

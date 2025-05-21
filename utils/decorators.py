@@ -5,7 +5,7 @@ import re
 from services.auth_service import AuthService
 from models.request_log import RequestLog
 from utils.response import unauthorized_response, rate_limit_response
-from config import API_KEY_HEADER, API_KEY_PATTERN, RATE_LIMIT_WARNING_THRESHOLD
+from config import API_KEY_HEADER, API_KEY_PATTERN, RATE_LIMIT_WARNING_THRESHOLD, PLANS
 import logging
 
 logger = logging.getLogger(__name__)
